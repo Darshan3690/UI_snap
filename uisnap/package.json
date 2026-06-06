@@ -1,0 +1,41 @@
+{
+  "name": "uisnap",
+  "displayName": "UISnap",
+  "version": "0.0.1",
+  "description": "UISnap is a UI reverse engineering extension that scans websites and generates rebuild prompts.",
+  "author": "UISnap",
+  "scripts": {
+    "dev": "plasmo dev",
+    "build": "plasmo build",
+    "package": "plasmo package"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "html2canvas": "^1.4.1",
+    "plasmo": "^0.90.5",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@ianvs/prettier-plugin-sort-imports": "4.1.1",
+    "@parcel/core": "^2.16.4",
+    "@parcel/transformer-js": "^2.16.4",
+    "@types/chrome": "0.0.258",
+    "@types/node": "20.11.5",
+    "@types/react": "18.2.48",
+    "@types/react-dom": "18.2.18",
+    "prettier": "3.2.4",
+    "typescript": "5.3.3"
+  },
+  "manifest": {
+    "permissions": [
+      "tabs",
+      "activeTab",
+      "scripting",
+      "storage"
+    ],
+    "host_permissions": [
+      "<all_urls>"
+    ]
+  }
+}
