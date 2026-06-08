@@ -14,7 +14,10 @@ const FALLBACK_ANALYSIS: GeminiAnalysis = {
   sectionDetails: {},
   imagePatterns: [],
   responsiveHints: "",
-  componentTree: ["App"]
+  componentTree: ["App"],
+  heroType: "unknown",
+  galleryType: "unknown",
+  footerType: "unknown"
 }
 
 const SYSTEM_PROMPT = `You are an expert UI/UX analyst and frontend developer.
@@ -24,7 +27,10 @@ Rules:
 - Be specific. "Large hero with full-bleed image and white overlay text" is good. "Nice header" is not.
 - Section names must come from the provided headings list when available. Never invent section names.
 - Never hallucinate components.
-- Color descriptions are already extracted from CSS — trust those over visual guessing.
+- Never output a carousel unless DOM Context includes carousel evidence or heroType is "carousel".
+- If galleryType is "single-column-stacked", describe a vertical full-width photo stack, not a grid.
+- If footerType is "minimal-seal", describe a centered emblem/seal footer, not a multi-column footer.
+- Color descriptions are already extracted from CSS. Trust those over visual guessing.
 - Output valid JSON only. No markdown fences, no preamble, no explanation.`
 
 function screenshotPart(base64: string) {
@@ -39,19 +45,19 @@ function screenshotPart(base64: string) {
 
 function selectScreenshots(screenshots: string[], max = 6): string[] {
   if (screenshots.length <= max) return screenshots
-  const selected: string[] = [screenshots[0]]
-  const middleCount = Math.max(max - 2, 1)
-  const step = Math.max(Math.floor((screenshots.length - 2) / middleCount), 1)
-  for (let i = 1; i < max - 1; i++) {
-    selected.push(screenshots[Math.min(i * step, screenshots.length - 2)])
-  }
-  selected.push(screenshots[screenshots.length - 1])
-  return selected
+
+  const lastIndex = screenshots.length - 1
+  const indexes = [0, 0.25, 0.5, 0.75, 1]
+    .map((percent) => Math.round(lastIndex * percent))
+    .filter((index, position, arr) => arr.indexOf(index) === position)
+
+  return indexes.slice(0, max).map((index) => screenshots[index])
 }
 
 function buildUserPrompt(tokens: DesignTokens, screenshotCount: number): string {
   const headings = tokens.headings ?? []
   const components = tokens.components ?? []
+  const visualPatterns = tokens.visualPatterns ?? {}
   const meta = tokens.meta ?? {
     title: "",
     description: "",
@@ -73,6 +79,15 @@ ${headings.length > 0 ? headings.map((h, i) => `${i + 1}. ${h}`).join("\n") : "(
 Detected components:
 ${components.length > 0 ? components.map((c) => `- ${c}`).join("\n") : "(none detected)"}
 
+Detected visual patterns:
+- Hero type: ${visualPatterns.heroType || "unknown"}
+- Gallery type: ${visualPatterns.galleryType || "unknown"}
+- Gallery images: ${visualPatterns.galleryImageCount ?? 0}
+- Full-width gallery images: ${visualPatterns.fullWidthGalleryImages ?? 0}
+- Footer type: ${visualPatterns.footerType || "unknown"}
+- Footer link count: ${visualPatterns.footerLinkCount ?? 0}
+- Carousel evidence: ${visualPatterns.carouselEvidence?.length ? visualPatterns.carouselEvidence.join(", ") : "none"}
+
 Extracted colors:
 - Primary: ${tokens.colors.primary}
 - Secondary: ${tokens.colors.secondary}
@@ -85,9 +100,12 @@ Extracted fonts:
 - Body: ${tokens.typography.bodyFont}
 
 Return JSON with keys:
-layoutStyle, navigationStyle, sections, sectionDetails, designStyle, colorMood, keyComponents, imagePatterns, uniquePatterns, responsiveHints, componentTree.
+layoutStyle, navigationStyle, sections, sectionDetails, designStyle, colorMood, keyComponents, imagePatterns, uniquePatterns, responsiveHints, componentTree, heroType, galleryType, footerType.
 
-Important: Use heading text exactly when naming sections whenever headings are available.`
+Important:
+- Use heading text exactly when naming sections whenever headings are available.
+- Do not invent carousel behavior when carousel evidence is "none".
+- Preserve detected gallery and footer types exactly when they are not unknown.`
 }
 
 function buildFallbackAnalysis(tokens: DesignTokens): GeminiAnalysis {
@@ -115,7 +133,10 @@ function buildFallbackAnalysis(tokens: DesignTokens): GeminiAnalysis {
     sectionDetails: {},
     imagePatterns: [],
     responsiveHints: "",
-    componentTree: ["App", "  Navbar", "  Hero", "  Footer"]
+    componentTree: ["App", "  Navbar", "  Hero", "  Footer"],
+    heroType: tokens.visualPatterns?.heroType ?? "unknown",
+    galleryType: tokens.visualPatterns?.galleryType ?? "unknown",
+    footerType: tokens.visualPatterns?.footerType ?? "unknown"
   }
 }
 
@@ -199,7 +220,10 @@ export async function analyzeWithGemini(
       sectionDetails: parsed.sectionDetails || {},
       imagePatterns: Array.isArray(parsed.imagePatterns) ? parsed.imagePatterns : [],
       responsiveHints: parsed.responsiveHints || "",
-      componentTree: Array.isArray(parsed.componentTree) ? parsed.componentTree : []
+      componentTree: Array.isArray(parsed.componentTree) ? parsed.componentTree : [],
+      heroType: parsed.heroType || tokens.visualPatterns?.heroType || "unknown",
+      galleryType: parsed.galleryType || tokens.visualPatterns?.galleryType || "unknown",
+      footerType: parsed.footerType || tokens.visualPatterns?.footerType || "unknown"
     }
   } catch {
     return buildFallbackAnalysis(tokens)

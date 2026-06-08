@@ -30,6 +30,37 @@ function sectionSize(tokens: DesignTokens) {
   return tokens.typography.sectionFontSize ?? tokens.typography.headingSizes[1] ?? tokens.typography.bodySize
 }
 
+function visualPatternLines(tokens: DesignTokens, analysis: GeminiAnalysis) {
+  const heroType = analysis.heroType ?? tokens.visualPatterns?.heroType ?? "unknown"
+  const galleryType = analysis.galleryType ?? tokens.visualPatterns?.galleryType ?? "unknown"
+  const footerType = analysis.footerType ?? tokens.visualPatterns?.footerType ?? "unknown"
+  const carouselEvidence = tokens.visualPatterns?.carouselEvidence ?? []
+
+  return `Hero type: ${heroType}
+Gallery type: ${galleryType}
+Footer type: ${footerType}
+Carousel evidence: ${carouselEvidence.length ? carouselEvidence.join(", ") : "none"}`
+}
+
+function strictPatternRules(tokens: DesignTokens, analysis: GeminiAnalysis) {
+  const heroType = analysis.heroType ?? tokens.visualPatterns?.heroType
+  const galleryType = analysis.galleryType ?? tokens.visualPatterns?.galleryType
+  const footerType = analysis.footerType ?? tokens.visualPatterns?.footerType
+  const rules: string[] = []
+
+  if (heroType === "static-image") {
+    rules.push("- Hero is a single static image/banner. Do not create an auto-rotating carousel.")
+  }
+  if (galleryType === "single-column-stacked") {
+    rules.push("- Gallery must be single-column stacked, full-width image cards/photos, not a 2-column grid.")
+  }
+  if (footerType === "minimal-seal") {
+    rules.push("- Footer must be minimal and centered with seal/emblem styling. Do not create multi-column nav links.")
+  }
+
+  return rules.length ? rules.join("\n") : "- Match detected component behavior exactly."
+}
+
 function colorPalette(tokens: DesignTokens) {
   const { colors } = tokens
 
@@ -92,8 +123,14 @@ ${numbered(analysis.sections)}
 Key UI Components:
 ${list(analysis.keyComponents)}
 
+Detected Visual Patterns:
+${visualPatternLines(tokens, analysis)}
+
 Must-Reproduce Patterns:
 ${list(analysis.uniquePatterns)}
+
+Strict Layout Rules:
+${strictPatternRules(tokens, analysis)}
 
 Requirements:
 - Use Next.js App Router, Tailwind CSS, shadcn/ui, and next/image
@@ -122,6 +159,12 @@ ${list(analysis.keyComponents)}
 - Smooth scroll between sections
 - Hover and focus states on all interactive elements
 - Loading states for dynamic content
+
+Detected Visual Patterns:
+${visualPatternLines(tokens, analysis)}
+
+Strict Layout Rules:
+${strictPatternRules(tokens, analysis)}
 
 Design System:
 - Primary color: ${tokens.colors.primary}
@@ -193,6 +236,12 @@ ${list(analysis.keyComponents)}
 Critical Patterns:
 ${list(analysis.uniquePatterns)}
 
+Detected Visual Patterns:
+${visualPatternLines(tokens, analysis)}
+
+Strict Layout Rules:
+${strictPatternRules(tokens, analysis)}
+
 Accessibility and Performance:
 - Semantic HTML
 - aria-label on icon-only buttons
@@ -214,6 +263,12 @@ ${numbered(analysis.sections)}
 
 COMPONENTS DETECTED:
 ${list(analysis.keyComponents)}
+
+DETECTED VISUAL PATTERNS:
+${visualPatternLines(tokens, analysis)}
+
+STRICT LAYOUT RULES:
+${strictPatternRules(tokens, analysis)}
 
 COLOR PALETTE:
 Primary: ${tokens.colors.primary}

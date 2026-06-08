@@ -69,7 +69,21 @@ function IndexPopup() {
   }
 
   async function handleCopy(label: string, value: string) {
-    await navigator.clipboard.writeText(value)
+    try {
+      window.focus()
+      await navigator.clipboard.writeText(value)
+    } catch {
+      const textarea = document.createElement("textarea")
+      textarea.value = value
+      textarea.style.position = "fixed"
+      textarea.style.left = "-9999px"
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      document.execCommand("copy")
+      textarea.remove()
+    }
+
     setCopiedLabel(`${label} copied`)
   }
 

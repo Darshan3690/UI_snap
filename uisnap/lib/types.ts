@@ -51,6 +51,15 @@ export interface DesignTokens {
     scrollSteps: number
     url: string
   }
+  visualPatterns?: {
+    heroType?: "static-image" | "carousel" | "text-only" | "unknown"
+    galleryType?: "single-column-stacked" | "multi-column-grid" | "masonry" | "none" | "unknown"
+    footerType?: "minimal-seal" | "multi-column-nav" | "simple-copyright" | "unknown"
+    carouselEvidence?: string[]
+    galleryImageCount?: number
+    fullWidthGalleryImages?: number
+    footerLinkCount?: number
+  }
   rootVars?: Record<string, string>
 }
 
@@ -66,6 +75,9 @@ export interface GeminiAnalysis {
   imagePatterns?: string[]
   responsiveHints?: string
   componentTree?: string[]
+  heroType?: DesignTokens["visualPatterns"]["heroType"]
+  galleryType?: DesignTokens["visualPatterns"]["galleryType"]
+  footerType?: DesignTokens["visualPatterns"]["footerType"]
 }
 
 export interface PromptExports {
