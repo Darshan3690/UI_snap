@@ -6,7 +6,7 @@ type ResultPanelProps = {
   tokens: DesignTokens
   analysis: GeminiAnalysis
   prompts: PromptExports
-  onCopy: (label: string, value: string) => void
+  onCopy: (label: string, value: string) => Promise<void>
   promptPreview: string
 }
 

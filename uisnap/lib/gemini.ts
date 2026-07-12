@@ -1,7 +1,12 @@
 import type { DesignTokens, GeminiAnalysis } from "./types"
 
-const GEMINI_MODEL = "gemini-2.5-flash-preview-05-20"
-const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+/**
+ * UISnap Proxy URL — your Cloudflare Worker.
+ * After deploying worker/index.js to Cloudflare Workers,
+ * replace the URL below with your actual worker URL.
+ * Example: "https://uisnap-proxy.yourname.workers.dev"
+ */
+const PROXY_URL = "https://uisnap-proxy.YOUR_SUBDOMAIN.workers.dev"
 
 const FALLBACK_ANALYSIS: GeminiAnalysis = {
   layoutStyle: "Unknown",
@@ -149,11 +154,10 @@ function stripCodeFence(text: string) {
 }
 
 export async function analyzeWithGemini(
-  apiKey: string,
   screenshots: string[],
   tokens: DesignTokens
 ): Promise<GeminiAnalysis> {
-  if (!apiKey || screenshots.length === 0) {
+  if (screenshots.length === 0) {
     return buildFallbackAnalysis(tokens)
   }
 
@@ -187,18 +191,20 @@ export async function analyzeWithGemini(
   }
 
   try {
-    const response = await fetch(
-      `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
-      }
-    )
+    const { gemini_api_key } = await chrome.storage.local.get("gemini_api_key")
+    const url = gemini_api_key 
+      ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${gemini_api_key}`
+      : PROXY_URL
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody)
+    })
 
     if (!response.ok) {
       const err = await response.text()
-      throw new Error(`Gemini API error ${response.status}: ${err}`)
+      throw new Error(`Proxy error ${response.status}: ${err}`)
     }
 
     const data = await response.json()

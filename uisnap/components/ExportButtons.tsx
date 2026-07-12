@@ -2,7 +2,7 @@ import type { PromptExports } from "../lib/types"
 
 type ExportButtonsProps = {
   prompts: PromptExports
-  onCopy: (label: string, value: string) => void
+  onCopy: (label: string, value: string) => Promise<void>
 }
 
 const buttons = [
@@ -24,7 +24,11 @@ export function ExportButtons({ prompts, onCopy }: ExportButtonsProps) {
       {buttons.map(([label, key]) => (
         <button
           key={label}
-          onClick={() => onCopy(label, prompts[key])}
+          onClick={async () => {
+            await onCopy(label, prompts[key])
+            if (key === "v0") window.open("https://v0.dev/chat", "_blank")
+            if (key === "lovable") window.open("https://lovable.dev/", "_blank")
+          }}
           style={{
             border: "1px solid rgba(148, 163, 184, 0.18)",
             borderRadius: 12,

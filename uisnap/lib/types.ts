@@ -61,6 +61,7 @@ export interface DesignTokens {
     footerLinkCount?: number
   }
   rootVars?: Record<string, string>
+  isFallback?: boolean
 }
 
 export interface GeminiAnalysis {
@@ -96,4 +97,11 @@ export interface ScanResult {
   tokens: DesignTokens
   analysis: GeminiAnalysis
   prompts: PromptExports
+}
+
+export interface ScanHistoryItem {
+  id: string
+  url: string
+  timestamp: number
+  result: ScanResult
 }
