@@ -44,6 +44,15 @@ const DEFAULT_TOKENS: DesignTokens = {
     scrollSteps: 0,
     url: ""
   },
+  visualPatterns: {
+    heroType: "unknown",
+    galleryType: "unknown",
+    footerType: "unknown",
+    carouselEvidence: [],
+    galleryImageCount: 0,
+    fullWidthGalleryImages: 0,
+    footerLinkCount: 0
+  },
   rootVars: {}
 }
 
@@ -342,11 +351,12 @@ function extractBorderRadius(tokens: DesignTokens): { borderRadius: string; bord
 
 function detectComponentsAndHeadings() {
   const found: string[] = []
+  const visualPatterns = detectVisualPatterns()
 
   const checks: Array<{ label: string; selectors: string[] }> = [
     { label: "Navbar", selectors: ["nav", "header nav", '[class*="navbar"]', '[role="navigation"]'] },
     { label: "Hero section", selectors: ['[class*="hero"]', '[class*="banner"]', "main > section:first-child"] },
-    { label: "Image carousel / slider", selectors: ['[class*="slider"]', '[class*="carousel"]', '[class*="swiper"]'] },
+    { label: "Image carousel / slider", selectors: ['[class*="carousel"]', '[class*="swiper"]', '[class*="splide"]', '[class*="slick"]', '[data-ride="carousel"]'] },
     { label: "Feature grid", selectors: ['[class*="feature"]', '[class*="benefit"]', '[class*="service"]'] },
     { label: "Testimonials", selectors: ['[class*="testimonial"]', '[class*="review"]', '[class*="quote"]'] },
     { label: "Pricing table", selectors: ['[class*="pricing"]', '[class*="plan"]', '[class*="tier"]'] },
@@ -360,6 +370,10 @@ function detectComponentsAndHeadings() {
   ]
 
   for (const { label, selectors } of checks) {
+    if (label === "Image carousel / slider" && visualPatterns.heroType !== "carousel") {
+      continue
+    }
+
     for (const sel of selectors) {
       try {
         if (document.querySelector(sel)) {
@@ -377,11 +391,24 @@ function detectComponentsAndHeadings() {
     .filter(Boolean)
     .slice(0, 16) as string[]
 
-  return { components: found, headings }
+  if (visualPatterns.heroType === "static-image") {
+    found.push("Hero: static single image")
+  }
+  if (visualPatterns.galleryType === "single-column-stacked") {
+    found.push("Gallery type: single-column-stacked")
+  }
+  if (visualPatterns.footerType === "minimal-seal") {
+    found.push("Footer type: minimal-seal")
+  }
+
+  return { components: [...new Set(found)], headings, visualPatterns }
 }
 
 function extractPageMeta() {
-  const pageHeight = document.documentElement.scrollHeight
+  const pageHeight = Math.max(
+    document.body?.scrollHeight ?? 0,
+    document.documentElement.scrollHeight
+  )
   const viewportHeight = window.innerHeight || 800
   return {
     title: document.title,
@@ -393,13 +420,150 @@ function extractPageMeta() {
   }
 }
 
+function findLikelyGallery() {
+  const candidates = [...document.querySelectorAll<HTMLElement>(
+    "section, article, div, main"
+  )]
+    .map((el) => {
+      const text = `${el.className || ""} ${el.id || ""} ${el.textContent?.slice(0, 120) || ""}`
+      const images = [...el.querySelectorAll<HTMLImageElement>("img")]
+        .filter((img) => img.getBoundingClientRect().width > 80 && img.getBoundingClientRect().height > 80)
+      const score =
+        images.length * 2 +
+        (/gallery|campus|life|photo|image|media/i.test(text) ? 8 : 0)
+
+      return { el, images, score }
+    })
+    .filter((candidate) => candidate.images.length >= 4)
+    .sort((a, b) => b.score - a.score)
+
+  return candidates[0] ?? null
+}
+
+function detectGalleryType(): NonNullable<DesignTokens["visualPatterns"]> {
+  const candidate = findLikelyGallery()
+
+  if (!candidate) {
+    return {
+      galleryType: "none",
+      galleryImageCount: 0,
+      fullWidthGalleryImages: 0
+    }
+  }
+
+  const containerRect = candidate.el.getBoundingClientRect()
+  const containerWidth = Math.max(containerRect.width, 1)
+  const rows = new Map<number, number>()
+  let fullWidthGalleryImages = 0
+
+  for (const image of candidate.images) {
+    const rect = image.getBoundingClientRect()
+    const widthRatio = rect.width / containerWidth
+    if (widthRatio >= 0.88) fullWidthGalleryImages++
+
+    const row = Math.round(rect.top / 20) * 20
+    rows.set(row, (rows.get(row) ?? 0) + 1)
+  }
+
+  const maxImagesPerRow = Math.max(...rows.values())
+  const style = getComputedStyle(candidate.el)
+  const gridColumns = style.display.includes("grid")
+    ? style.gridTemplateColumns.split(" ").filter(Boolean).length
+    : 1
+
+  let galleryType: NonNullable<DesignTokens["visualPatterns"]>["galleryType"] = "unknown"
+  if (
+    candidate.images.length >= 4 &&
+    fullWidthGalleryImages / candidate.images.length >= 0.7 &&
+    maxImagesPerRow <= 1 &&
+    gridColumns <= 1
+  ) {
+    galleryType = "single-column-stacked"
+  } else if (maxImagesPerRow > 1 || gridColumns > 1) {
+    galleryType = "multi-column-grid"
+  } else {
+    galleryType = "masonry"
+  }
+
+  return {
+    galleryType,
+    galleryImageCount: candidate.images.length,
+    fullWidthGalleryImages
+  }
+}
+
+function detectFooterType(): NonNullable<DesignTokens["visualPatterns"]> {
+  const footer = document.querySelector<HTMLElement>("footer, [class*='footer']")
+
+  if (!footer) {
+    return { footerType: "unknown", footerLinkCount: 0 }
+  }
+
+  const links = footer.querySelectorAll("a[href]").length
+  const images = footer.querySelectorAll("img, svg").length
+  const text = footer.textContent?.trim() ?? ""
+  const style = getComputedStyle(footer)
+  const centered = style.textAlign === "center" || footer.getBoundingClientRect().width > 0
+
+  if (links <= 2 && images > 0 && text.length < 250 && centered) {
+    return { footerType: "minimal-seal", footerLinkCount: links }
+  }
+
+  if (links >= 5) {
+    return { footerType: "multi-column-nav", footerLinkCount: links }
+  }
+
+  return { footerType: "simple-copyright", footerLinkCount: links }
+}
+
+function detectHeroType(): NonNullable<DesignTokens["visualPatterns"]> {
+  const carouselSelectors = [
+    '[class*="carousel"]',
+    '[class*="swiper"]',
+    '[class*="splide"]',
+    '[class*="slick"]',
+    '[data-ride="carousel"]',
+    '[aria-roledescription="carousel"]'
+  ]
+  const carouselEvidence = carouselSelectors.filter((selector) => {
+    try {
+      return Boolean(document.querySelector(selector))
+    } catch {
+      return false
+    }
+  })
+
+  if (carouselEvidence.length > 0) {
+    return { heroType: "carousel", carouselEvidence }
+  }
+
+  const hero = document.querySelector<HTMLElement>(
+    '[class*="hero"], [class*="banner"], main > section:first-child'
+  )
+  const heroImages = hero?.querySelectorAll("img, picture").length ?? 0
+
+  if (heroImages > 0) {
+    return { heroType: "static-image", carouselEvidence: [] }
+  }
+
+  return { heroType: hero ? "text-only" : "unknown", carouselEvidence: [] }
+}
+
+function detectVisualPatterns(): NonNullable<DesignTokens["visualPatterns"]> {
+  return {
+    ...detectHeroType(),
+    ...detectGalleryType(),
+    ...detectFooterType()
+  }
+}
+
 export function extractDesignTokens(): DesignTokens {
   try {
     const rootVars = extractRootCSSVariables()
     const colors = extractColors(rootVars)
     const typography = extractFonts(rootVars)
     const spacing = extractSpacing()
-    const { components, headings } = detectComponentsAndHeadings()
+    const { components, headings, visualPatterns } = detectComponentsAndHeadings()
 
     const draft: DesignTokens = {
       colors,
@@ -409,6 +573,7 @@ export function extractDesignTokens(): DesignTokens {
       components,
       headings,
       meta: extractPageMeta(),
+      visualPatterns,
       rootVars
     }
 

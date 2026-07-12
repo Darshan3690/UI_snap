@@ -2,7 +2,7 @@ import { captureFullPage } from "./lib/capture"
 import { FALLBACK_ANALYSIS, analyzeWithGemini } from "./lib/gemini"
 import { buildPromptExports } from "./lib/prompt-builder"
 import { DEFAULT_TOKENS } from "./lib/extract"
-import type { DesignTokens, GeminiAnalysis, ScanResult } from "./lib/types"
+import type { DesignTokens, GeminiAnalysis, ScanResult, ScanHistoryItem } from "./lib/types"
 import { crawlFromTab } from "./lib/crawler"
 
 type ExtractResponse =
@@ -20,33 +20,35 @@ async function getActiveTab() {
 
 async function extractTokens(tabId: number) {
   try {
+    chrome.runtime.sendMessage({ action: "scanProgress", step: "extracting" }).catch(() => {})
     const response = (await chrome.tabs.sendMessage(tabId, {
       action: "extract"
     })) as ExtractResponse
 
     if (!response?.ok) {
-      return DEFAULT_TOKENS
+      return { ...DEFAULT_TOKENS, isFallback: true }
     }
 
     return response.tokens
   } catch {
-    return DEFAULT_TOKENS
+    return { ...DEFAULT_TOKENS, isFallback: true }
   }
-}
-
-async function getApiKey() {
-  const result = await chrome.storage.local.get(["geminiApiKey"])
-  return (result.geminiApiKey as string | undefined) ?? ""
 }
 
 async function runScan(): Promise<ScanResult> {
   const tab = await getActiveTab()
   const tokens = await extractTokens(tab.id)
-  const captureResult = await captureFullPage(tab.id, tab.windowId)
-  const apiKey = await getApiKey()
-  const analysis: GeminiAnalysis = apiKey
-    ? await analyzeWithGemini(apiKey, captureResult.screenshots, tokens)
-    : FALLBACK_ANALYSIS
+  chrome.runtime.sendMessage({ action: "scanProgress", step: "analyzing", data: { tokens } }).catch(() => {})
+  
+  const captureResult = await captureFullPage(tab.id, tab.windowId, (count) => {
+    chrome.runtime.sendMessage({ action: "scanProgress", step: "capturing", data: { count, tokens } }).catch(() => {})
+  })
+
+  // API key is now handled server-side in the Cloudflare Worker proxy
+  const analysis: GeminiAnalysis = await analyzeWithGemini(
+    captureResult.screenshots,
+    tokens
+  )
 
   const baseResult: ScanResult = {
     screenshots: captureResult.screenshots.slice(0, 1),
@@ -92,6 +94,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
       })
 
+      try {
+        const tab = await getActiveTab()
+        const historyRes = await chrome.storage.local.get("uisnap_history")
+        let history: ScanHistoryItem[] = Array.isArray(historyRes.uisnap_history) ? historyRes.uisnap_history : []
+        
+        history.unshift({
+          id: Date.now().toString(),
+          url: tab.url || "Unknown URL",
+          timestamp: Date.now(),
+          result
+        })
+        
+        history = history.slice(0, 10)
+        await chrome.storage.local.set({ uisnap_history: history })
+      } catch (e) {
+        console.error("Failed to save history", e)
+      }
+
       sendResponse({ ok: true, result })
     } catch (error) {
       const messageText =
@@ -120,7 +140,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       const { results, combinedPrompt } = await crawlFromTab(tab.id, tab.windowId, options)
 
-      // store last crawl summary and combined prompts
       await chrome.storage.session.set({ uisnapLastCrawl: { pageCount: results.length, combinedPrompt } })
 
       sendResponse({ ok: true, pages: results, combinedPrompt })

@@ -1,5 +1,5 @@
 import { captureFullPage } from "./capture"
-import { analyzeWithGemini, FALLBACK_ANALYSIS } from "./gemini"
+import { analyzeWithGemini } from "./gemini"
 import { buildPromptExports } from "./prompt-builder"
 import { DEFAULT_TOKENS } from "./extract"
 import type { DesignTokens, GeminiAnalysis, ScanResult } from "./types"
@@ -124,20 +124,19 @@ export async function crawlFromTab(
       tokens = null
     }
 
-    // capture
+    // capture screenshots
     let captureResult
     try {
       captureResult = await captureFullPage(startTabId, windowId)
-    } catch (e) {
+    } catch {
       captureResult = { screenshots: [], screenshotCount: 0, pageHeight: 0, scrollSteps: 0 }
     }
 
-    const apiKeyResp = await chrome.storage.local.get(["geminiApiKey"])
-    const apiKey = (apiKeyResp.geminiApiKey as string | undefined) ?? ""
-
-    const analysis: GeminiAnalysis = apiKey
-      ? await analyzeWithGemini(apiKey, captureResult.screenshots, tokens ?? DEFAULT_TOKENS)
-      : FALLBACK_ANALYSIS
+    // API key is handled server-side in the Cloudflare Worker proxy
+    const analysis: GeminiAnalysis = await analyzeWithGemini(
+      captureResult.screenshots,
+      tokens ?? DEFAULT_TOKENS
+    )
 
     const baseResult: ScanResult = {
       screenshots: captureResult.screenshots.slice(0, 1),

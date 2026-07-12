@@ -6,7 +6,7 @@ type ResultPanelProps = {
   tokens: DesignTokens
   analysis: GeminiAnalysis
   prompts: PromptExports
-  onCopy: (label: string, value: string) => void
+  onCopy: (label: string, value: string) => Promise<void>
   promptPreview: string
 }
 
@@ -72,8 +72,8 @@ export function ResultPanel({
             tokens.colors.accent,
             tokens.colors.background,
             tokens.colors.text
-          ].map((color) => (
-            <div key={color}>{colorChip(color)}</div>
+          ].map((color, index) => (
+            <div key={`${color}-${index}`}>{colorChip(color)}</div>
           ))}
         </div>
         <div style={{ display: "grid", gap: 8, fontSize: 12, color: "#CBD5E1" }}>

@@ -112,7 +112,11 @@ async function captureUnique(
   return true
 }
 
-export async function captureFullPage(tabId: number, windowId: number) {
+export async function captureFullPage(
+  tabId: number,
+  windowId: number,
+  onProgress?: (count: number) => void
+) {
   let { pageHeight, viewportHeight } = await getTabMetrics(tabId)
   const screenshots: string[] = []
   const seenHashes = new Set<string>()
@@ -128,6 +132,7 @@ export async function captureFullPage(tabId: number, windowId: number) {
     await sleep(CAPTURE_DELAY_MS)
 
     await captureUnique(windowId, screenshots, seenHashes)
+    if (onProgress) onProgress(screenshots.length)
     scrollSteps++
 
     const metrics = await getTabMetrics(tabId)
@@ -158,6 +163,7 @@ export async function captureFullPage(tabId: number, windowId: number) {
     await scrollPage(tabId, currentY)
     await sleep(CAPTURE_DELAY_MS)
     await captureUnique(windowId, screenshots, seenHashes)
+    if (onProgress) onProgress(screenshots.length)
     scrollSteps++
   }
 
